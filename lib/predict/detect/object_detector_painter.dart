@@ -1,81 +1,121 @@
 import 'dart:math';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:ultralytics_yolo/predict/detect/detected_object.dart';
 
 /// A painter used to draw the detected objects on the screen.
-
 class ObjectDetectorPainter extends CustomPainter {
   /// Creates a [ObjectDetectorPainter].
   ObjectDetectorPainter(
     this._detectionResults, [
-    this._colors,
     this._strokeWidth = 2.5,
   ]);
 
   final List<DetectedObject> _detectionResults;
-  final List<Color>? _colors;
   final double _strokeWidth;
+
+  // Define a map of label colors
+  final Map<int, Color> _labelColors = {
+    0: Colors.red,
+    1: Colors.green,
+    2: Colors.blue,
+    3: Colors.orange,
+    4: Colors.purple,
+    5: Colors.yellow,
+    6: Colors.pink,
+    7: Colors.teal,
+    8: Colors.cyan,
+    9: Colors.indigo,
+    10: Colors.lime,
+    11: Colors.brown,
+    12: Colors.amber,
+    13: Colors.lightGreen,
+    14: Colors.lightBlue,
+    15: Colors.deepOrange,
+    16: Colors.deepPurple,
+    17: Colors.grey,
+    18: Colors.black,
+    19: Colors.blueGrey,
+    20: Colors.redAccent,
+    21: Colors.greenAccent,
+    22: Colors.blueAccent,
+    23: Colors.orangeAccent,
+    24: Colors.purpleAccent,
+  };
 
   @override
   void paint(Canvas canvas, Size size) {
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = _strokeWidth;
-    final colors = _colors ?? Colors.primaries;
 
     for (final detectedObject in _detectionResults) {
+      // Skip detections with confidence < 0.5
+
       final left = detectedObject.boundingBox.left;
-      final top = detectedObject.boundingBox.top;
-      final right = detectedObject.boundingBox.right;
-      final bottom = detectedObject.boundingBox.bottom;
+      final top = detectedObject.boundingBox.top - 45;
       final width = detectedObject.boundingBox.width;
       final height = detectedObject.boundingBox.height;
 
-      if (left.isNaN ||
-          top.isNaN ||
-          right.isNaN ||
-          bottom.isNaN ||
-          width.isNaN ||
-          height.isNaN) return;
+      // Get color for the label
+      final color = _labelColors[detectedObject.index] ?? Colors.black;
 
-      final opacity = (detectedObject.confidence - 0.2) / (1.0 - 0.2) * 0.9;
-
-      //
-      // DRAW
-      // Rect
-      final index = detectedObject.index % colors.length;
-      final color = colors[index];
+      // Draw Bounding Box
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(left, top, width, height),
-          const Radius.circular(8),
+          const Radius.circular(12),
         ),
-        borderPaint..color = color.withOpacity(opacity),
+        borderPaint..color = color.withOpacity(0.8),
       );
 
-      // Label
-      final builder = ui.ParagraphBuilder(
-        ui.ParagraphStyle(
-          textAlign: TextAlign.left,
-          fontSize: 16,
-          textDirection: TextDirection.ltr,
-        ),
-      )
-        ..pushStyle(
-          ui.TextStyle(
+      // Create the label text
+      final label =
+          '${detectedObject.label} (${(detectedObject.confidence * 100).toStringAsFixed(1)}%)';
+
+      // Measure the text width and height
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(
             color: Colors.white,
-            background: Paint()..color = color.withOpacity(opacity),
+            fontSize: 14,
           ),
-        )
-        ..addText(' ${detectedObject.label} '
-            '${(detectedObject.confidence * 100).toStringAsFixed(1)}\n')
-        ..pop();
-      canvas.drawParagraph(
-        builder.build()..layout(ui.ParagraphConstraints(width: right - left)),
-        Offset(max(0, left), max(0, top)),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(); // Layout the text to measure its dimensions
+
+      final textWidth = textPainter.width;
+      final textHeight = textPainter.height;
+
+      // Ensure the background rect fits the text and add padding
+      final labelPadding = 8.0;
+      final labelRectWidth = textWidth + labelPadding * 2;
+      final labelRectHeight = textHeight + labelPadding * 2;
+
+      // Draw Label Background
+      final labelRect = Rect.fromLTWH(
+        left, // Align with bounding box
+        max(0, top - labelRectHeight), // Position above the bounding box
+        labelRectWidth,
+        labelRectHeight,
       );
+
+      final labelBackground = Paint()
+        ..color = color.withOpacity(0.9)
+        ..style = PaintingStyle.fill;
+
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(labelRect, const Radius.circular(8)),
+        labelBackground,
+      );
+
+      // Draw the text
+      final textOffset = Offset(
+        labelRect.left + labelPadding, // Add padding to the left
+        labelRect.top + labelPadding, // Add padding to the top
+      );
+      textPainter.paint(canvas, textOffset);
     }
   }
 

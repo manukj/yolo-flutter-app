@@ -118,7 +118,6 @@ class _UltralyticsYoloCameraPreviewState
                       return CustomPaint(
                         painter: ObjectDetectorPainter(
                           snapshot.data! as List<DetectedObject>,
-                          widget.boundingBoxesColorList,
                           widget.controller.value.strokeWidth,
                         ),
                       );

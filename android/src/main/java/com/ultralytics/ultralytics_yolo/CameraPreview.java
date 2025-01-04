@@ -19,7 +19,9 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.ultralytics.ultralytics_yolo.predict.Predictor;
 
 import java.util.concurrent.ExecutionException;
-
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class CameraPreview {
     public final static Size CAMERA_PREVIEW_SIZE = new Size(640, 480);
@@ -55,6 +57,8 @@ public class CameraPreview {
         if (!busy) {
             busy = true;
 
+            final boolean isMirrored = (facing == CameraSelector.LENS_FACING_FRONT);
+
             Preview cameraPreview = new Preview.Builder()
                     .setTargetAspectRatio(AspectRatio.RATIO_4_3)
                     .build();
@@ -63,23 +67,42 @@ public class CameraPreview {
                     .requireLensFacing(facing)
                     .build();
 
-            ImageAnalysis imageAnalysis =
-                    new ImageAnalysis.Builder()
-                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
-                            .build();
-            imageAnalysis.setAnalyzer(Runnable::run, imageProxy -> {
-                predictor.predict(imageProxy, facing == CameraSelector.LENS_FACING_FRONT);
+            ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_BLOCK_PRODUCER)
+                    .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+                    .build();
 
-                //clear stream for next image
-                imageProxy.close();
+            final ExecutorService executorService = Executors.newSingleThreadExecutor();
+            final AtomicBoolean isPredicting = new AtomicBoolean(false);
+
+            imageAnalysis.setAnalyzer(Runnable::run, imageProxy -> {
+                if (isPredicting.get()) {
+                    imageProxy.close();
+                    return;
+                }
+
+                isPredicting.set(true);
+
+                executorService.submit(() -> {
+                    try {
+                        predictor.predict(imageProxy, isMirrored);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    } finally {
+                        // clear stream for next image
+                        imageProxy.close();
+
+                        isPredicting.set(false);
+                    }
+                });
             });
 
             // Unbind use cases before rebinding
             cameraProvider.unbindAll();
 
             // Bind use cases to camera
-            Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner) activity, cameraSelector, cameraPreview, imageAnalysis);
+            Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner) activity, cameraSelector, cameraPreview,
+                    imageAnalysis);
 
             cameraControl = camera.getCameraControl();
 
@@ -98,6 +121,6 @@ public class CameraPreview {
     }
 
     public void setScaleFactor(double factor) {
-        cameraControl.setZoomRatio((float)factor);
+        cameraControl.setZoomRatio((float) factor);
     }
 }
