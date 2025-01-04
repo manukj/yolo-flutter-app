@@ -8,7 +8,7 @@ class ObjectDetectorPainter extends CustomPainter {
   /// Creates a [ObjectDetectorPainter].
   ObjectDetectorPainter(
     this._detectionResults, [
-    this._strokeWidth = 2.5,
+    this._strokeWidth = 3.0,
   ]);
 
   final List<DetectedObject> _detectionResults;
@@ -50,17 +50,27 @@ class ObjectDetectorPainter extends CustomPainter {
       ..strokeWidth = _strokeWidth;
 
     for (final detectedObject in _detectionResults) {
-      // Skip detections with confidence < 0.5
-
       final left = detectedObject.boundingBox.left;
-      final top = detectedObject.boundingBox.top - 45;
+      final top = detectedObject.boundingBox.top;
       final width = detectedObject.boundingBox.width;
       final height = detectedObject.boundingBox.height;
 
       // Get color for the label
       final color = _labelColors[detectedObject.index] ?? Colors.black;
 
-      // Draw Bounding Box
+      // Draw bounding box with shadow
+      canvas.drawShadow(
+        Path()
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromLTWH(left, top, width, height),
+              const Radius.circular(12),
+            ),
+          ),
+        color.withOpacity(0.5),
+        4.0,
+        true,
+      );
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(left, top, width, height),
@@ -80,10 +90,11 @@ class ObjectDetectorPainter extends CustomPainter {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 14,
+            fontWeight: FontWeight.bold,
           ),
         ),
         textDirection: TextDirection.ltr,
-      )..layout(); // Layout the text to measure its dimensions
+      )..layout();
 
       final textWidth = textPainter.width;
       final textHeight = textPainter.height;
@@ -93,7 +104,7 @@ class ObjectDetectorPainter extends CustomPainter {
       final labelRectWidth = textWidth + labelPadding * 2;
       final labelRectHeight = textHeight + labelPadding * 2;
 
-      // Draw Label Background
+      // Draw Label Background with gradient
       final labelRect = Rect.fromLTWH(
         left, // Align with bounding box
         max(0, top - labelRectHeight), // Position above the bounding box
@@ -101,19 +112,26 @@ class ObjectDetectorPainter extends CustomPainter {
         labelRectHeight,
       );
 
-      final labelBackground = Paint()
-        ..color = color.withOpacity(0.9)
+      final labelGradient = Paint()
+        ..shader = LinearGradient(
+          colors: [
+            color.withOpacity(0.9),
+            color.withOpacity(0.7),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(labelRect)
         ..style = PaintingStyle.fill;
 
       canvas.drawRRect(
         RRect.fromRectAndRadius(labelRect, const Radius.circular(8)),
-        labelBackground,
+        labelGradient,
       );
 
-      // Draw the text
+      // Draw the text with a shadow
       final textOffset = Offset(
-        labelRect.left + labelPadding, // Add padding to the left
-        labelRect.top + labelPadding, // Add padding to the top
+        labelRect.left + labelPadding,
+        labelRect.top + labelPadding,
       );
       textPainter.paint(canvas, textOffset);
     }
